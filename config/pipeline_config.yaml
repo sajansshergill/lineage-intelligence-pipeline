@@ -1,0 +1,9 @@
+pipeline:
+  name: daily_trade_pipeline
+  stages: []
+
+retry:
+  max_attempts: 3
+  backoff_base_sec: 2.0
+
+duckdb_path: data/pipeline.duckdb
