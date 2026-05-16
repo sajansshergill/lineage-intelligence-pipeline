@@ -2,20 +2,21 @@
 
 A production-grade PySpark ETL framework with column-level lineage tracking, declarative data quality enforcement, and an AI-powered lineage advisor — built to mirror the data platform challenges in financial services engineering.
 
-## Table Of Content
-- Overview
-- Architecture
-- Key Features
-- Tech Stack
-- Project Structure
-- Getting Started
-- Data Quality Rules
-- Lineage Graph
-- Dashboard & AI Advisor
-- Job Definitions
-- Running Tests
-- JD Alignment Map
-- Roadmap
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Data Quality Rules](#data-quality-rules)
+- [Lineage Graph](#lineage-graph)
+- [Dashboard & AI Advisor](#dashboard--ai-advisor)
+- [Job Definitions](#job-definitions)
+- [Running Tests](#running-tests)
+- [JD Alignment Map](#jd-alignment-map)
+- [Roadmap](#roadmap)
 
 ## Overview
 Financial data pipelines fail silently. A wrong notional value in a raw trade feed can corrupt a risk report three hops downstream —— and by the time someone noties, the lineage is gone. This project solves that.
@@ -254,3 +255,4 @@ pytest tests/test_dq_rules.py -v
 - Add MLflow tracking for DQ score trends over time
 - CI/CD: auto-run pipeline smoke test on push with Github Actions
 
+Built to demonstrate production-grade financial data engineering — PySpark ETL, data lineage, DQ enforcement, and AI-assisted provenance querying.Share
