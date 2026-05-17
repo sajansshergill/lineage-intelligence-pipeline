@@ -1,9 +1,115 @@
+# config/pipeline_config.yaml
+
+# ----------------------------
+
+# Main pipeline configuration for the Financial Lineage Pipeline.
+
+# Referenced by etl/framework.py at runtime.
+
 pipeline:
+
   name: daily_trade_pipeline
-  stages: []
+
+  stages:
+
+    - name: ingest
+
+      transforms: []          # Raw read handled by Pipeline._read_input()
+
+      checkpoint: post_ingest
+
+    - name: clean
+
+      transforms:
+
+        - NullFill
+
+        - TypeCast
+
+        - Dedup
+
+      checkpoint: post_clean
+
+    - name: enrich
+
+      transforms:
+
+        - FxConvert
+
+        - DateExpand
+
+        - LeiLookup
+
+        - ExposureRollup
+
+        - PositionNet
+
+    - name: load
+
+      transforms: []          # Handled by WriteStarSchema (Phase 3)
+
+# Retry configuration for StageRunner
 
 retry:
+
   max_attempts: 3
+
   backoff_base_sec: 2.0
 
+# DuckDB path (relative to project root)
+
 duckdb_path: data/pipeline.duckdb
+
+# Dead-letter queue base path
+
+dlq_path: data/dead_letter
+
+# Transform-level config overrides
+
+null_fill:
+
+  notional:          0.0
+
+  quantity:          0.0
+
+  currency:          "USD"
+
+  direction:         "UNKNOWN"
+
+  settlement_status: "PENDING"
+
+type_cast: {}       # Use BaseTransform defaults
+
+dedup:
+
+  key_cols:  [trade_id]
+
+  order_col: trade_date
+
+  order_asc: false
+
+fx_convert:
+
+  source_col:   notional
+
+  currency_col: currency
+
+  rates_override: {}
+
+date_expand:
+
+  date_col:   trade_date
+
+  settle_col: settlement_date
+
+lei_lookup:
+
+  counterparty_col: counterparty_id
+
+  broadcast: true
+
+logging:
+
+  level: INFO
+
+  format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
