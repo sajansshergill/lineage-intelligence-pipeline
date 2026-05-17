@@ -82,6 +82,8 @@ This project targets the engineering challenges faced by data platform teams at 
 ## Project Structure
 <img width="373" height="590" alt="image" src="https://github.com/user-attachments/assets/2490096b-71c4-4fe6-9cc9-318f48056308" />
 
+
+
 <img width="373" height="617" alt="Screenshot 2026-05-15 at 11 07 15 PM" src="https://github.com/user-attachments/assets/087362fc-0fd8-4ae9-92d0-9c30778d32f8" />
 
 ## Getting Started
