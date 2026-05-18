@@ -1,1 +1,193 @@
+# dq/rules_config.yaml
+# ---------------------
+# Declarative data quality rule definitions.
+# Loaded by dq/rules_engine.py at runtime.
+#
+# Rule fields:
+#   name        : unique rule identifier
+#   type        : null_check | range_check | referential_integrity | cross_field
+#   field       : column to validate (null_check, range_check, referential_integrity)
+#   fields      : list of columns involved (cross_field)
+#   severity    : WARN | ERROR | CRITICAL
+#   stage       : pipeline checkpoint — post_ingest | post_clean | pre_load
+#   row_key_col : column used as row identifier in violation records (default: trade_id)
 
+rules:
+
+  # -----------------------------------------------------------------------
+  # POST-INGEST: Raw data checks — run immediately after ingestion
+  # -----------------------------------------------------------------------
+
+  - name: trade_id_not_null
+    field: trade_id
+    type: null_check
+    severity: CRITICAL
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: notional_not_null
+    field: notional
+    type: null_check
+    severity: CRITICAL
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: trade_date_not_null
+    field: trade_date
+    type: null_check
+    severity: CRITICAL
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: counterparty_id_not_null
+    field: counterparty_id
+    type: null_check
+    severity: ERROR
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: product_id_not_null
+    field: product_id
+    type: null_check
+    severity: ERROR
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: currency_not_null
+    field: currency
+    type: null_check
+    severity: ERROR
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: currency_valid
+    field: currency
+    type: referential_integrity
+    mode: static_values
+    allowed_values: [USD, EUR, GBP, JPY, CHF, CAD, AUD, HKD, SGD, CNY]
+    severity: ERROR
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: direction_valid
+    field: direction
+    type: referential_integrity
+    mode: static_values
+    allowed_values: [BUY, SELL]
+    severity: ERROR
+    stage: post_ingest
+    row_key_col: trade_id
+
+  - name: counterparty_id_valid
+    field: counterparty_id
+    type: referential_integrity
+    mode: static_values
+    allowed_values: [CP001, CP002, CP003, CP004, CP005]
+    severity: WARN
+    stage: post_ingest
+    row_key_col: trade_id
+
+  # -----------------------------------------------------------------------
+  # POST-CLEAN: Enriched/typed data checks — run after clean stage
+  # -----------------------------------------------------------------------
+
+  - name: notional_positive
+    field: notional
+    type: range_check
+    min: 0.01
+    max: 1000000000
+    severity: ERROR
+    stage: post_clean
+    row_key_col: trade_id
+
+  - name: quantity_positive
+    field: quantity
+    type: range_check
+    min: 1
+    max: 10000000
+    severity: ERROR
+    stage: post_clean
+    row_key_col: trade_id
+
+  - name: settlement_date_not_null
+    field: settlement_date
+    type: null_check
+    severity: WARN
+    stage: post_clean
+    row_key_col: trade_id
+
+  - name: settlement_status_valid
+    field: settlement_status
+    type: referential_integrity
+    mode: static_values
+    allowed_values: [SETTLED, PENDING, FAILED, CANCELLED, UNKNOWN]
+    severity: WARN
+    stage: post_clean
+    row_key_col: trade_id
+
+  - name: settlement_date_not_before_trade_date
+    fields: [trade_date, settlement_date]
+    type: cross_field
+    expr: "settlement_date >= trade_date"
+    severity: WARN
+    stage: post_clean
+    row_key_col: trade_id
+
+  - name: notional_usd_positive
+    field: notional_usd
+    type: range_check
+    min: 0.01
+    max: 2000000000
+    severity: ERROR
+    stage: post_clean
+    row_key_col: trade_id
+
+  # -----------------------------------------------------------------------
+  # PRE-LOAD: Final checks before writing to star schema
+  # -----------------------------------------------------------------------
+
+  - name: notional_usd_not_null
+    field: notional_usd
+    type: null_check
+    severity: CRITICAL
+    stage: pre_load
+    row_key_col: trade_id
+
+  - name: notional_eur_not_null
+    field: notional_eur
+    type: null_check
+    severity: ERROR
+    stage: pre_load
+    row_key_col: trade_id
+
+  - name: trade_year_not_null
+    field: trade_year
+    type: null_check
+    severity: ERROR
+    stage: pre_load
+    row_key_col: trade_id
+
+  - name: fx_rate_in_valid_range
+    field: fx_rate_to_usd
+    type: range_check
+    min: 0.0001
+    max: 1000.0
+    severity: ERROR
+    stage: pre_load
+    row_key_col: trade_id
+
+  - name: lei_present_for_large_trades
+    fields: [notional_usd, lei_code]
+    type: cross_field
+    expr: "NOT (notional_usd > 10000000 AND (lei_code IS NULL OR lei_code = ''))"
+    severity: WARN
+    stage: pre_load
+    row_key_col: trade_id
+
+  - name: days_to_settlement_reasonable
+    fields: [trade_date, settlement_date, days_to_settlement]
+    type: cross_field
+    expr: "days_to_settlement BETWEEN -1 AND 30"
+    severity: WARN
+    stage: pre_load
+    row_key_col: trade_id
