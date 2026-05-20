@@ -123,6 +123,28 @@ streamlit run dashboard/app.py
 docker-compose up --build
 ### Runs pipeline + dashboard + DuckDB volume
 
+## Deployment
+This repository is ready for automatic deployment from GitHub with Streamlit Community Cloud.
+
+**Streamlit Cloud setup**
+1. Push the repository to GitHub.
+2. In Streamlit Cloud, create a new app from the GitHub repo.
+3. Set the main file path to `dashboard/app.py`.
+4. Use the default branch `main`.
+5. Add optional secrets:
+   - `ANTHROPIC_API_KEY` for the AI Advisor tab
+   - `ANTHROPIC_MODEL` if you want to override the default Claude model
+
+After the app is connected, Streamlit Cloud redeploys automatically on every push to `main`. The `.streamlit/config.toml` file supplies cloud-friendly Streamlit defaults, and `packages.txt` installs OpenJDK for PySpark-compatible environments.
+
+GitHub Actions also runs on every push and pull request to `main` via `.github/workflows/ci.yml`. The workflow installs dependencies, compiles key modules, runs tests, and smoke-checks the Streamlit entry point.
+
+**Docker deployment**
+The app can also run with Docker:
+```bash
+docker compose up --build dashboard
+```
+
 ## Data Quality Rules
 Rules are declared in dq/rules_config.yaml:
 rules:
