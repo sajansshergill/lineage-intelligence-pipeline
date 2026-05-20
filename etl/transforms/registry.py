@@ -120,6 +120,7 @@ def _load_all_transforms():
         "etl.transforms.clean",
         "etl.transforms.enrich",
         "etl.transforms.aggregate",
+        "etl.transforms.load",
     ]
 
     for mod_path in modules:

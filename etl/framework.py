@@ -55,6 +55,7 @@ class BatchMeta:
     pipeline_name: str
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     stage_results: Dict[str, "StageResult"] = field(default_factory=dict)
+    dq_results: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def new(cls, pipeline_name: str) -> "BatchMeta":
@@ -241,11 +242,21 @@ class Pipeline:
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.spark = spark or self._build_spark_session()
-        self.dlq = DeadLetterQueue(spark=self.spark)
+        self.duckdb_path = self.config.get("duckdb_path", "data/pipeline.duckdb")
+        Path(self.duckdb_path).parent.mkdir(parents=True, exist_ok=True)
+        self.dlq = DeadLetterQueue(
+            spark=self.spark,
+            base_path=self.config.get("dlq_path", "data/dead_letter"),
+        )
         self.retry_handler = RetryHandler(
             max_attempts=self.config.get("retry", {}).get("max_attempts", 3),
             backoff_base=self.config.get("retry", {}).get("backoff_base_sec", 2.0),
         )
+        self.tracker = LineageTracker()
+        self.dq_engine = self._build_dq_engine()
+
+        from etl.transforms.registry import _load_all_transforms
+        _load_all_transforms()
 
     # ------------------------------------------------------------------
     # Public API
@@ -270,9 +281,11 @@ class Pipeline:
         """
         name = pipeline_name or self.config["pipeline"]["name"]
         meta = BatchMeta.new(pipeline_name=name)
+        self.tracker = LineageTracker()
         logger.info("=== Pipeline '%s' starting | batch=%s ===", name, meta.batch_id)
 
         df = self._read_input(input_path)
+        pipeline_failed = False
 
         for stage_cfg in self.config["pipeline"]["stages"]:
             sname = stage_cfg["name"]
@@ -280,7 +293,10 @@ class Pipeline:
                 logger.info("Skipping stage '%s' (filter=%s)", sname, stage_filter)
                 continue
 
-            transforms = self._instantiate_transforms(stage_cfg["transforms"])
+            transforms = self._instantiate_transforms(
+                stage_cfg.get("transforms", []),
+                tracker=self.tracker,
+            )
             runner = StageRunner(
                 stage_name=sname,
                 transforms=transforms,
@@ -290,13 +306,18 @@ class Pipeline:
 
             try:
                 df = runner.run(df, meta)
+                self._run_dq_checkpoint(df, stage_cfg, meta)
                 logger.info("Stage '%s' completed: %s", sname, meta.stage_results[sname])
             except Exception:
                 logger.error("Pipeline halted at stage '%s'", sname)
+                pipeline_failed = True
                 break
 
+        self._persist_lineage(meta)
         self._write_run_metadata(meta)
         logger.info("=== Pipeline '%s' finished | batch=%s ===", name, meta.batch_id)
+        if pipeline_failed:
+            raise RuntimeError(f"Pipeline '{name}' failed. See pipeline_runs for batch={meta.batch_id}.")
         return meta
 
     # ------------------------------------------------------------------
@@ -305,6 +326,8 @@ class Pipeline:
 
     def _build_spark_session(self) -> SparkSession:
         os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
+        os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
+        os.environ.setdefault("PYSPARK_DRIVER_PYTHON", sys.executable)
 
         java_home = os.environ.get("JAVA_HOME")
         homebrew_java_home = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home")
@@ -347,6 +370,20 @@ class Pipeline:
             raise ValueError(f"Config file is empty: {self.config_path}")
         return config
 
+    def _build_dq_engine(self):
+        dq_config = self.config.get("dq", {})
+        if dq_config.get("enabled", True) is False:
+            return None
+        try:
+            from dq.rules_engine import DQRulesEngine
+            return DQRulesEngine(
+                config_path=dq_config.get("rules_config", "dq/rules_config.yaml"),
+                duckdb_path=self.duckdb_path,
+            )
+        except Exception as exc:
+            logger.warning("DQ engine disabled because initialization failed: %s", exc)
+            return None
+
     def _read_input(self, input_path: str) -> DataFrame:
         p = Path(input_path)
         if not p.exists():
@@ -363,27 +400,54 @@ class Pipeline:
         else:
             raise ValueError(f"Unsupported input format: {p.suffix}")
 
-    def _instantiate_transforms(self, transform_names: List[str]) -> List[BaseTransform]:
+    def _instantiate_transforms(
+        self,
+        transform_names: List[str],
+        tracker: LineageTracker,
+    ) -> List[BaseTransform]:
         """
         Resolves transform names to classes via the registry.
         Import here to avoid circular imports.
         """
-        from etl.transforms.registry import TRANSFORM_REGISTRY
+        from etl.transforms.registry import TRANSFORM_REGISTRY, _load_all_transforms
+        _load_all_transforms()
         instances = []
         for name in transform_names:
             cls = TRANSFORM_REGISTRY.get(name)
             if cls is None:
                 raise ValueError(f"Transform '{name}' not found in registry. "
                                  f"Available: {list(TRANSFORM_REGISTRY.keys())}")
-            instances.append(cls(dlq=self.dlq, tracker=LineageTracker()))
+            instances.append(cls(config=self.config, dlq=self.dlq, tracker=tracker))
         return instances
+
+    def _run_dq_checkpoint(
+        self,
+        df: DataFrame,
+        stage_cfg: Dict[str, Any],
+        meta: BatchMeta,
+    ) -> None:
+        checkpoint = stage_cfg.get("checkpoint")
+        if not checkpoint or self.dq_engine is None:
+            return
+        result = self.dq_engine.run_checkpoint(
+            df=df,
+            checkpoint=checkpoint,
+            batch_id=meta.batch_id,
+        )
+        meta.dq_results[checkpoint] = result
+
+    def _persist_lineage(self, meta: BatchMeta) -> None:
+        """Persist collected lineage without failing the pipeline if storage is unavailable."""
+        if self.tracker.edge_count() == 0:
+            logger.info("No lineage edges emitted for batch=%s", meta.batch_id)
+            return
+        self.tracker.save_to_duckdb(self.duckdb_path, meta.batch_id)
 
     def _write_run_metadata(self, meta: BatchMeta) -> None:
         """Persist run metadata to DuckDB for dashboard consumption."""
         try:
             import duckdb
-            duckdb_path = self.config.get("duckdb_path", "data/pipeline.duckdb")
-            con = duckdb.connect(duckdb_path)
+            con = duckdb.connect(self.duckdb_path)
             con.execute("""
                 CREATE TABLE IF NOT EXISTS pipeline_runs (
                     batch_id        VARCHAR,

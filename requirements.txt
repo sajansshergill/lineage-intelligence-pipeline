@@ -1,4 +1,9 @@
 duckdb
 networkx
+pandas
 pyspark
-pyyaml
+PyYAML
+requests
+streamlit
+anthropic
+pytest

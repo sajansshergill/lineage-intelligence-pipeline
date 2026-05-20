@@ -1,0 +1,40 @@
+services:
+  dashboard:
+    build: .
+    command: streamlit run dashboard/app.py --server.address=0.0.0.0
+    env_file:
+      - .env
+    environment:
+      DUCKDB_PATH: /app/data/pipeline.duckdb
+      STARDOG_URL: http://stardog:5820
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+
+  pipeline:
+    build: .
+    command: python jobs/job_executor.py --job daily_trade_pipeline
+    env_file:
+      - .env
+    environment:
+      DUCKDB_PATH: /app/data/pipeline.duckdb
+      STARDOG_URL: http://stardog:5820
+    volumes:
+      - ./data:/app/data
+    profiles:
+      - jobs
+
+  stardog:
+    image: stardog/stardog:latest
+    ports:
+      - "5820:5820"
+    environment:
+      STARDOG_SERVER_JAVA_ARGS: "-Xms512m -Xmx1g"
+    volumes:
+      - stardog-data:/var/opt/stardog
+    profiles:
+      - stardog
+
+volumes:
+  stardog-data:

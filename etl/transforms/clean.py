@@ -160,9 +160,14 @@ class TypeCast(BaseTransform):
             cast_col = F.col(col_name).cast(target_type)
 
             # Detect rows where cast produced null but original was non-null
-            newly_null = df.filter(
-                F.col(col_name).isNotNull() & cast_col.isNull()
-            ).select("_row_hash").rdd.flatMap(lambda r: r).collect()
+            newly_null = [
+                row["_row_hash"]
+                for row in (
+                    df.filter(F.col(col_name).isNotNull() & cast_col.isNull())
+                    .select("_row_hash")
+                    .collect()
+                )
+            ]
 
             if newly_null:
                 failed_hashes.extend(newly_null)

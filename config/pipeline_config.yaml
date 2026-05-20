@@ -46,7 +46,11 @@ pipeline:
 
     - name: load
 
-      transforms: []          # Handled by WriteStarSchema (Phase 3)
+      transforms:
+
+        - WriteStarSchema
+
+      checkpoint: pre_load
 
 # Retry configuration for StageRunner
 
@@ -59,6 +63,8 @@ retry:
 # DuckDB path (relative to project root)
 
 duckdb_path: data/pipeline.duckdb
+
+star_schema_path: models/star_schema.sql
 
 # Dead-letter queue base path
 

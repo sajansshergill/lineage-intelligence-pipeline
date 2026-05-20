@@ -1,0 +1,34 @@
+{
+  "jobs": {
+    "generate_sample_data": {
+      "type": "command",
+      "description": "Generate a small deterministic trade feed for local runs.",
+      "command": "python scripts/generate_sample_data.py --trades 1000 --positions 100 --dirty 0.03 --outdir data/raw",
+      "depends_on": [],
+      "max_runtime_sec": 120,
+      "retry_attempts": 0
+    },
+    "run_trade_pipeline": {
+      "type": "command",
+      "description": "Run the PySpark ETL pipeline over the generated trade feed.",
+      "command": "python etl/framework.py --config config/pipeline_config.yaml --input {TRADE_FILE}",
+      "depends_on": [
+        "generate_sample_data"
+      ],
+      "max_runtime_sec": 1800,
+      "retry_attempts": 1
+    },
+    "daily_trade_pipeline": {
+      "type": "group",
+      "description": "Generate data and run the local trade lineage pipeline.",
+      "members": [
+        "generate_sample_data",
+        "run_trade_pipeline"
+      ],
+      "depends_on": [
+        "run_trade_pipeline"
+      ],
+      "schedule": "0 6 * * *"
+    }
+  }
+}
