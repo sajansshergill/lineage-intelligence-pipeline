@@ -13,8 +13,9 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from graph.queries import graph_json
+from dashboard.data_bootstrap import ensure_demo_database
 
-DUCKDB_PATH = "data/pipeline.duckdb"
+DUCKDB_PATH = ensure_demo_database()
 
 st.title("AI Lineage Advisor")
 st.caption("Ask lineage questions. Without an Anthropic API key, this page shows the graph context it would send.")

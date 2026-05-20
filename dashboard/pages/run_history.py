@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any, List
 
 import streamlit as st
 
-DUCKDB_PATH = "data/pipeline.duckdb"
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from dashboard.data_bootstrap import ensure_demo_database
+
+DUCKDB_PATH = ensure_demo_database()
 
 
 def query(sql: str, params: List[Any] | None = None) -> List[dict]:
