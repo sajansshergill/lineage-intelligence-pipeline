@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any, List
 
+import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -15,6 +17,8 @@ if str(ROOT_DIR) not in sys.path:
 from dashboard.data_bootstrap import ensure_demo_database
 
 DUCKDB_PATH = ensure_demo_database()
+
+st.set_page_config(page_title="DQ Violations · Lineage Intelligence", layout="wide")
 
 
 def query(sql: str, params: List[Any] | None = None) -> List[dict]:
@@ -46,6 +50,15 @@ scores = query(
     """
 )
 st.subheader("Scores")
+if scores:
+    sdf = pd.DataFrame(scores)
+    fig = px.bar(sdf.iloc[::-1], x="checkpoint", y="dq_score", color="checkpoint",
+                 text="dq_score", template="plotly_dark",
+                 title="DQ score by checkpoint")
+    fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+    fig.update_yaxes(range=[0, 115])
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, width="stretch")
 st.dataframe(scores, use_container_width=True)
 
 violations = query(
@@ -60,4 +73,23 @@ violations = query(
     params,
 )
 st.subheader("Violations")
+if violations:
+    vdf = pd.DataFrame(violations)
+    left, right = st.columns(2)
+    with left:
+        sev = vdf["severity"].value_counts().reset_index()
+        sev.columns = ["severity", "violations"]
+        fig = px.bar(sev, x="severity", y="violations", color="severity",
+                     template="plotly_dark", title="Violations by severity")
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, width="stretch")
+    with right:
+        by_rule = vdf["rule_name"].value_counts().reset_index()
+        by_rule.columns = ["rule_name", "violations"]
+        fig = px.bar(by_rule, x="violations", y="rule_name", orientation="h",
+                     template="plotly_dark", title="Violations by rule")
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, width="stretch")
+    st.download_button("⬇️ Export violations (CSV)", vdf.to_csv(index=False).encode(),
+                       file_name="dq_violations.csv", mime="text/csv")
 st.dataframe(violations, use_container_width=True)

@@ -2,8 +2,21 @@
 
 A production-grade PySpark ETL framework with column-level lineage tracking, declarative data quality enforcement, and an AI-powered lineage advisor — built to mirror the data platform challenges in financial services engineering.
 
+![Lineage Intelligence Pipeline demo](docs/demo.gif)
+
+## The Console
+
+The Streamlit console (`dashboard/app.py`) is the operational face of the pipeline — a dark, glass-styled command centre over the DuckDB observability tables and the raw trade and position feeds:
+
+- **Global live filters** — trade date range, asset classes, currencies, settlement status, direction, minimum notional and DQ severity in the sidebar; every KPI, chart and table on the page re-renders from the same filtered slice.
+- **KPI cards with deltas** — filtered trade count and gross USD notional against the prior equal-length period, latest DQ score against the previous checkpoint, violation and lineage-edge totals, and the settlement-failure rate.
+- **Animated exposure views** — native Plotly `animation_frame` charts: monthly gross notional by asset class and a cumulative exposure race across the full trading window. Press ▶ Play and watch two years of flow evolve.
+- **3D lineage and trade space** — the column-level lineage graph rendered as a rotatable 3D graph (source → transform → report, layered by lineage depth), every trade plotted in date × quantity × notional 3D space, and an asset-class × month exposure surface.
+- **Drilldown pages** — run history with stage throughput charts, a DQ violations page with severity / rule breakdowns and CSV export, a lineage explorer with ancestry, impact and path tracing plus the same 3D graph, and the Claude-powered AI lineage advisor.
+
 ## Table of Contents
 
+- [The Console](#the-console)
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Key Features](#key-features)
